@@ -78,7 +78,7 @@ $ cd smu
 $ git clone https://github.com/aiver-workshop/QF635-2026a.git
 
 ```
-These steps will download course repository in a folder (for example `~/smu/QF635-2026`), and this is going to be our `working directory`.
+These steps will download course repository in a folder (for example `~/smu/QF635-2026a`), and this is going to be our `working directory`.
 
 
 
