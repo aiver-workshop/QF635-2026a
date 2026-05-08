@@ -70,7 +70,7 @@ To get the list of packages installed:
 ## 🧑‍💻 Github - Download the course repository (Python codes)
 Download and install Git from https://git-scm.com/downloads
 
-Course repository is hosted on GitHub: https://github.com/aiver-workshop/qf635
+Course repository is hosted on GitHub: https://github.com/aiver-workshop/QF635-2026a
 
 We are going to download course repository to folder on our PC, for example under `~/smu` (`~/` refers to home folder)
 
