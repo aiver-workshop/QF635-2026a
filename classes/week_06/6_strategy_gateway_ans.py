@@ -9,6 +9,7 @@ KEY TEACHING POINTS:
    Strategies register callback methods:
        - on_orderbook(book)
        - on_execution(event)
+       - on_agg_trade(trade)
 
 3. Event-Driven Architecture:
    The gateway receives exchange events and immediately notifies the strategy.
@@ -40,7 +41,7 @@ from binance import AsyncClient, Client, BinanceSocketManager
 from binance.ws.depthcache import FuturesDepthCacheManager
 from common.interface_book import VenueOrderBook, PriceLevel, OrderBook
 from common.interface_order import OrderEvent, OrderStatus, ExecutionType, Side
-
+from common.interface_trade import AggTrade
 
 logging.basicConfig(
     format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s] %(message)s",
@@ -78,6 +79,7 @@ class BinanceFutureGateway:
 
         self._orderbook_callbacks: list[Callable[[VenueOrderBook], None]] = []
         self._execution_callbacks: list[Callable[[OrderEvent], None]] = []
+        self._agg_trade_callbacks: list[Callable[[dict], None]] = []
 
     def connect(self) -> None:
         logging.info("Starting Binance gateway")
@@ -105,6 +107,7 @@ class BinanceFutureGateway:
 
         self._loop.create_task(self._listen_orderbook_forever())
         self._loop.create_task(self._listen_execution_forever())
+        self._loop.create_task(self._listen_agg_trade_forever())
 
     async def _listen_orderbook_forever(self) -> None:
         logging.info("Subscribing to Binance Futures depth cache")
@@ -132,6 +135,29 @@ class BinanceFutureGateway:
 
             except Exception:
                 logging.exception("Depth stream error, reconnecting...")
+                await asyncio.sleep(3)
+
+    async def _listen_agg_trade_forever(self) -> None:
+        """Subscribes to the aggregate trade stream."""
+        logging.info("Subscribing to Binance Futures aggTrade stream")
+        while True:
+            try:
+                bm = BinanceSocketManager(self._async_client)
+                # Use aggtrade_futures_socket for futures
+                async with bm.aggtrade_futures_socket(self._symbol) as stream:
+                    while True:
+                        msg = await stream.recv()
+                        data = msg.get("data") if "data" in msg else msg
+                        if isinstance(data, dict) and data.get("e") == "aggTrade":
+                            agg_trade = AggTrade(
+                                price=float(data["p"]),
+                                size=float(data["q"]),
+                                is_buyer_maker=data["m"]
+                            )
+                            for callback in self._agg_trade_callbacks:
+                                callback(agg_trade)
+            except Exception:
+                logging.exception("aggTrade stream error, reconnecting...")
                 await asyncio.sleep(3)
 
     async def _listen_execution_forever(self) -> None:
@@ -218,17 +244,14 @@ class BinanceFutureGateway:
             logging.exception("Failed to place post-only limit order: %s", exception)
             return False
 
-    def register_orderbook_callback(
-        self,
-        callback: Callable[[VenueOrderBook], None],
-    ) -> None:
+    def register_orderbook_callback(self, callback: Callable[[VenueOrderBook], None]) -> None:
         self._orderbook_callbacks.append(callback)
 
-    def register_execution_callback(
-        self,
-        callback: Callable[[OrderEvent], None],
-    ) -> None:
+    def register_execution_callback(self, callback: Callable[[OrderEvent], None]) -> None:
         self._execution_callbacks.append(callback)
+
+    def register_agg_trade_callback(self, callback: Callable[[dict], None]) -> None:
+        self._agg_trade_callbacks.append(callback)
 
 
 class SimpleStrategy:
@@ -237,12 +260,25 @@ class SimpleStrategy:
         self.name = name
         self.gateway = gateway
         self.start_time = time.time()
+
+        # order and position
         self.order_delay_seconds = 2
         self.order_sent = False
         self.position = 0.0
 
+        # Track net aggressive volume
+        self.net_volume = 0.0
+
+        # Track the latest state of the order book
+        self.last_book: OrderBook | None = None
+
     def on_orderbook(self, order_book: VenueOrderBook) -> None:
         book = order_book.get_book()
+
+        # Update local reference
+        self.last_book = book
+
+        # print TOB
         best_bid = book.bids[0]
         best_ask = book.asks[0]
         logging.info(
@@ -271,6 +307,21 @@ class SimpleStrategy:
                 logging.warning("[%s] Failed to post-only limit order", self.name)
 
             self.order_sent = True
+
+    def on_agg_trade(self, trade: AggTrade) -> None:
+        # Update net volume: + for taker buys, - for taker sells
+        if trade.is_buy():
+            self.net_volume += trade.size
+        else:
+            self.net_volume -= trade.size
+
+        logging.info(
+            "[%s] AGG_TRADE | Net Vol: %.3f | Last: %.3f @ %.2f",
+            self.name,
+            self.net_volume,
+            trade.size,
+            trade.price
+        )
 
     def on_execution(self, order_event: OrderEvent) -> None:
         logging.info("[%s] Receive execution: %s",self.name, order_event)
@@ -302,16 +353,15 @@ if __name__ == "__main__":
         testnet=USE_TESTNET,
     )
 
+    # create strategy
     strategy = SimpleStrategy(gateway)
 
-    gateway.register_orderbook_callback(
-        strategy.on_orderbook
-    )
+    # register event handlers
+    gateway.register_orderbook_callback(strategy.on_orderbook)
+    gateway.register_execution_callback(strategy.on_execution)
+    gateway.register_agg_trade_callback(strategy.on_agg_trade)
 
-    gateway.register_execution_callback(
-        strategy.on_execution
-    )
-
+    # start connection
     gateway.connect()
 
     while True:
