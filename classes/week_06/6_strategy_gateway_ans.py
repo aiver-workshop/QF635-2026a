@@ -79,7 +79,7 @@ class BinanceFutureGateway:
 
         self._orderbook_callbacks: list[Callable[[VenueOrderBook], None]] = []
         self._execution_callbacks: list[Callable[[OrderEvent], None]] = []
-        self._agg_trade_callbacks: list[Callable[[dict], None]] = []
+        self._agg_trade_callbacks: list[Callable[[AggTrade], None]] = []
 
     def connect(self) -> None:
         logging.info("Starting Binance gateway")
@@ -150,6 +150,7 @@ class BinanceFutureGateway:
                         data = msg.get("data") if "data" in msg else msg
                         if isinstance(data, dict) and data.get("e") == "aggTrade":
                             agg_trade = AggTrade(
+                                contract_name=data["s"],
                                 price=float(data["p"]),
                                 size=float(data["q"]),
                                 is_buyer_maker=data["m"]
@@ -250,7 +251,7 @@ class BinanceFutureGateway:
     def register_execution_callback(self, callback: Callable[[OrderEvent], None]) -> None:
         self._execution_callbacks.append(callback)
 
-    def register_agg_trade_callback(self, callback: Callable[[dict], None]) -> None:
+    def register_agg_trade_callback(self, callback: Callable[[AggTrade], None]) -> None:
         self._agg_trade_callbacks.append(callback)
 
 
@@ -316,8 +317,9 @@ class SimpleStrategy:
             self.net_volume -= trade.size
 
         logging.info(
-            "[%s] AGG_TRADE | Net Vol: %.3f | Last: %.3f @ %.2f",
+            "[%s] AGG_TRADE %s | Net Vol: %.3f | Last: %.3f @ %.2f",
             self.name,
+            trade.contract_name,
             self.net_volume,
             trade.size,
             trade.price
