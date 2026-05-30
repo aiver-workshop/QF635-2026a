@@ -1,8 +1,5 @@
 """
 Live Week 7 strategy dashboard.
-
-Reads dashboard_state.json written by SimpleStrategy and displays portfolio
-equity plus live position mark-to-market data.
 """
 
 import json
@@ -19,46 +16,81 @@ UPDATE_INTERVAL_MS = 1000
 
 app = Dash(__name__)
 
-BG_COLOR = "#0B0F19"       # Deep cosmic midnight blue canvas
-PANEL_COLOR = "#151D30"    # Slightly lighter navy for cards and panels
-TEXT_MAIN = "#F1F5F9"      # Clean, crisp slate-white for visibility
-TEXT_MUTED = "#94A3B8"     # Soft grey-blue for secondary labels
-GRID_COLOR = "#1E293B"     # Muted border lines that separate elements smoothly
-ACCENT = "#38BDF8"         # Vibrant ice blue for highlights and focal points
-POSITIVE = "#34D399"       # Crisp emerald green for positive returns
-NEGATIVE = "#FB7185"       # Sophisticated rose red for negative metrics
+BG_COLOR = "#0B0F19"
+PANEL_COLOR = "#151D30"
+HEADER_COLOR = "#202B3D"
+TEXT_MAIN = "#F1F5F9"
+TEXT_MUTED = "#94A3B8"
+GRID_COLOR = "#1E293B"
+POSITIVE = "#4ADE80"
+NEGATIVE = "#F87171"
+EQUITY_ACCENT = "#3B82F6"
 
 CARD_STYLE = {
-    "background-color": PANEL_COLOR,
+    "backgroundColor": PANEL_COLOR,
     "color": TEXT_MAIN,
     "padding": "20px",
-    "border-radius": "12px",
-    "text-align": "center",
+    "borderRadius": "12px",
+    "textAlign": "center",
     "flex": "1",
     "margin": "10px",
-    "box-shadow": "0 10px 15px -3px rgba(0,0,0,0.3)",
+    "boxShadow": "0 10px 15px -3px rgba(0,0,0,0.3)",
     "fontFamily": "Segoe UI, -apple-system, Arial",
-    "border": "1px solid #334155"
+    "border": "1px solid #334155",
 }
+
+
+def signal_color(value):
+    try:
+        value = float(value)
+        if value > 0:
+            return POSITIVE
+        if value < 0:
+            return NEGATIVE
+    except Exception:
+        pass
+
+    return TEXT_MAIN
+
+
+def get_equity_card_style():
+    style = CARD_STYLE.copy()
+    style["borderTop"] = f"3px solid {EQUITY_ACCENT}"
+    style["boxShadow"] = "0 0 12px rgba(59,130,246,0.18)"
+    return style
+
+
+def get_neutral_card_style():
+    return CARD_STYLE.copy()
+
+
+def get_value_style(value, force_negative=False):
+    try:
+        numeric_value = float(value)
+    except Exception:
+        numeric_value = 0.0
+
+    if force_negative and numeric_value != 0:
+        color = NEGATIVE
+    else:
+        color = signal_color(numeric_value)
+
+    return {
+        "color": color,
+        "fontSize": "32px",
+        "fontWeight": "700",
+    }
 
 
 def load_state() -> dict:
     if not DASHBOARD_FILE.exists() or DASHBOARD_FILE.stat().st_size == 0:
-        return {
-            "timestamp": "-",
-            "summary": {},
-            "positions": [],
-        }
+        return {"timestamp": "-", "summary": {}, "positions": []}
 
     try:
         with open(DASHBOARD_FILE, "r") as file:
             return json.load(file)
     except Exception:
-        return {
-            "timestamp": "READ_ERROR",
-            "summary": {},
-            "positions": [],
-        }
+        return {"timestamp": "READ_ERROR", "summary": {}, "positions": []}
 
 
 def format_money(value: float) -> str:
@@ -69,15 +101,16 @@ def format_pct(value: float) -> str:
     return f"{value * 100:.2f}%"
 
 
-def metric_card(label: str, value_id: str):
+def metric_card(label: str, value_id: str, card_id: str):
     return html.Div(
+        id=card_id,
         style=CARD_STYLE,
         children=[
             html.Div(
                 label,
                 style={
                     "color": TEXT_MUTED,
-                    "fontSize": "12px",
+                    "fontSize": "11px",
                     "textTransform": "uppercase",
                     "letterSpacing": "0.04em",
                 },
@@ -86,7 +119,7 @@ def metric_card(label: str, value_id: str):
                 id=value_id,
                 style={
                     "color": TEXT_MAIN,
-                    "fontSize": "24px",
+                    "fontSize": "32px",
                     "fontWeight": "700",
                 },
             ),
@@ -132,12 +165,12 @@ app.layout = html.Div(
                         "flexWrap": "wrap",
                     },
                     children=[
-                        metric_card("Equity", "equity-card"),
-                        metric_card("Total PnL", "total-pnl-card"),
-                        metric_card("Realized PnL", "realized-pnl-card"),
-                        metric_card("Unrealized PnL", "unrealized-pnl-card"),
-                        metric_card("Max Drawdown", "max-dd-card"),
-                        metric_card("Max Drawdown %", "max-dd-pct-card"),
+                        metric_card("Equity", "equity-card", "equity-container"),
+                        metric_card("Total PnL", "total-pnl-card", "total-pnl-container"),
+                        metric_card("Realized PnL", "realized-pnl-card", "realized-pnl-container"),
+                        metric_card("Unrealized PnL", "unrealized-pnl-card", "unrealized-pnl-container"),
+                        metric_card("Max Drawdown", "max-dd-card", "max-dd-container"),
+                        metric_card("Max Drawdown %", "max-dd-pct-card", "max-dd-pct-container"),
                     ],
                 ),
                 html.Div(
@@ -155,7 +188,7 @@ app.layout = html.Div(
                         dcc.Graph(
                             id="positions-table",
                             config={"displayModeBar": False},
-                            style={"height": "360px"},
+                            style={"height": "420px"},
                         ),
                     ],
                 ),
@@ -180,6 +213,20 @@ app.layout = html.Div(
         Output("max-dd-card", "children"),
         Output("max-dd-pct-card", "children"),
         Output("positions-table", "figure"),
+
+        Output("equity-container", "style"),
+        Output("total-pnl-container", "style"),
+        Output("realized-pnl-container", "style"),
+        Output("unrealized-pnl-container", "style"),
+        Output("max-dd-container", "style"),
+        Output("max-dd-pct-container", "style"),
+
+        Output("equity-card", "style"),
+        Output("total-pnl-card", "style"),
+        Output("realized-pnl-card", "style"),
+        Output("unrealized-pnl-card", "style"),
+        Output("max-dd-card", "style"),
+        Output("max-dd-pct-card", "style"),
     ],
     Input("interval-trigger", "n_intervals"),
 )
@@ -206,6 +253,20 @@ def update_dashboard(_):
         format_money(max_drawdown),
         format_pct(max_drawdown_pct),
         table,
+
+        get_equity_card_style(),
+        get_neutral_card_style(),
+        get_neutral_card_style(),
+        get_neutral_card_style(),
+        get_neutral_card_style(),
+        get_neutral_card_style(),
+
+        get_value_style(equity),
+        get_value_style(total_pnl),
+        get_value_style(realized_pnl),
+        get_value_style(unrealized_pnl),
+        get_value_style(max_drawdown, force_negative=True),
+        get_value_style(max_drawdown_pct, force_negative=True),
     )
 
 
@@ -224,9 +285,11 @@ def build_positions_table(positions: list[dict]):
         df = pd.DataFrame([{column: "-" for column in columns}])
     else:
         df = pd.DataFrame(positions)
+
         for column in columns:
             if column not in df.columns:
                 df[column] = 0.0
+
         df = df[columns]
 
     display_names = [
@@ -246,33 +309,88 @@ def build_positions_table(positions: list[dict]):
         else:
             values.append([format_table_number(value) for value in df[column]])
 
+    font_colors = []
+    for column in columns:
+        if column in ["position", "realized_pnl", "unrealized_pnl", "symbol_pnl"]:
+            font_colors.append([signal_color(v) for v in df[column]])
+        elif column == "mark_price":
+            font_colors.append(
+                [
+                    mtm_color(row["position"], row["average_entry_price"], row["mark_price"])
+                    for _, row in df.iterrows()
+                ]
+            )
+        else:
+            font_colors.append([TEXT_MAIN] * len(df))
+
+    alignments = ["center", "right", "right", "right", "right", "right", "right"]
+
     fig = go.Figure(
         data=[
             go.Table(
+                columnwidth=[1.0, 1.1, 1.2, 1.2, 1.2, 1.2, 1.2],
                 header={
                     "values": display_names,
-                    "fill_color": GRID_COLOR,  # Deep background for header row contrast
-                    "align": "left",
-                    "font": {"color": TEXT_MAIN, "size": 13},
-                    "line": {"color": GRID_COLOR, "width": 1},
-                    "height": 32,
+                    "fill_color": HEADER_COLOR,
+                    "align": alignments,
+                    "font": {
+                        "color": TEXT_MAIN,
+                        "size": 15,
+                    },
+                    "line": {
+                        "color": GRID_COLOR,
+                        "width": 1,
+                    },
+                    "height": 40,
                 },
                 cells={
                     "values": values,
-                    "fill_color": PANEL_COLOR,  # Matching card backgrounds
-                    "align": "left",
-                    "font": {"color": TEXT_MAIN, "size": 13},
-                    "line": {"color": GRID_COLOR, "width": 1},
-                    "height": 30,
-                },
+                    "fill_color": PANEL_COLOR,
+                    "align": alignments,
+                    "font": {
+                        "color": font_colors,
+                        "size": 16,
+                    },
+                    "line": {
+                        "color": GRID_COLOR,
+                        "width": 1,
+                    },
+                    "height": 38,
+                }
             )
         ]
     )
+
     fig.update_layout(
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
         paper_bgcolor=PANEL_COLOR,
+        plot_bgcolor=PANEL_COLOR,
     )
+
     return fig
+
+
+def mtm_color(position, entry_price, mark_price):
+    try:
+        position = float(position)
+        entry_price = float(entry_price)
+        mark_price = float(mark_price)
+    except Exception:
+        return TEXT_MAIN
+
+    if position > 0:
+        if mark_price > entry_price:
+            return POSITIVE
+        if mark_price < entry_price:
+            return NEGATIVE
+
+    if position < 0:
+        if mark_price < entry_price:
+            return POSITIVE
+        if mark_price > entry_price:
+            return NEGATIVE
+
+    return TEXT_MAIN
 
 
 def format_table_number(value):
@@ -280,7 +398,7 @@ def format_table_number(value):
         return value
 
     try:
-        return f"{float(value):,.6f}"
+        return f"{float(value):,.2f}"
     except Exception:
         return value
 

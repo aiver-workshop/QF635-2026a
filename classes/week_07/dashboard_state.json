@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-05-30 13:26:36",
+  "timestamp": "2026-05-30 13:34:30",
   "summary": {
     "initial_capital": 10000.0,
-    "equity": 9999.812810000001,
-    "total_pnl": -0.1871899999992995,
+    "equity": 9998.8751,
+    "total_pnl": -1.1249000000004863,
     "realized_pnl": 0.0,
-    "unrealized_pnl": -0.1871899999992995,
-    "current_drawdown": -0.1871899999987363,
-    "current_drawdown_pct": -1.871899999987363e-05,
-    "max_drawdown": -1.5461899999991147,
-    "max_drawdown_pct": -0.00015461899999991147
+    "unrealized_pnl": -1.1249000000004863,
+    "current_drawdown": -1.1249000000007072,
+    "current_drawdown_pct": -0.00011249000000007072,
+    "max_drawdown": -3.353659999998854,
+    "max_drawdown_pct": -0.0003353659999998854
   },
   "positions": [
     {
       "symbol": "BTCUSDT",
       "position": 0.13590000000000002,
       "average_entry_price": 73514.67740986019,
-      "mark_price": 73513.3,
+      "mark_price": 73506.4,
       "realized_pnl": 0.0,
-      "unrealized_pnl": -0.1871899999992995,
-      "symbol_pnl": -0.1871899999992995
+      "unrealized_pnl": -1.1249000000004863,
+      "symbol_pnl": -1.1249000000004863
     }
   ]
 }
