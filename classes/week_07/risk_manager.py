@@ -8,13 +8,13 @@ calculates risk/performance measures such as drawdown.
 
 class RiskManager:
 
-    def __init__(self):
-        self.equity_curve = []
-        self.peak_equity = None
-        self.current_drawdown = 0.0
-        self.current_drawdown_pct = 0.0
-        self.max_drawdown = 0.0
-        self.max_drawdown_pct = 0.0
+    def __init__(self) -> None:
+        self.equity_curve: list[float] = []
+        self.peak_equity: float | None = None
+        self.current_drawdown: float = 0.0
+        self.current_drawdown_pct: float = 0.0
+        self.max_drawdown: float = 0.0
+        self.max_drawdown_pct: float = 0.0
 
     def on_equity_update(self, equity: float) -> None:
         self.equity_curve.append(equity)
@@ -55,6 +55,9 @@ class RiskManager:
             return 0.0
 
         return self.equity_curve[-1]
+
+    def get_equity_curve(self) -> list[float]:
+        return self.equity_curve.copy()
 
     def _calculate_drawdown_pct(self, drawdown: float, peak_equity: float) -> float:
         if peak_equity == 0:

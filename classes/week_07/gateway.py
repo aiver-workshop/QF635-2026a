@@ -10,6 +10,7 @@ registered strategy callbacks:
 
 import asyncio
 import logging
+from decimal import Decimal, ROUND_DOWN
 from threading import Thread
 from typing import Callable
 
@@ -41,6 +42,8 @@ class BinanceFutureGateway:
 
         self._client: Client | None = None
         self._async_client: AsyncClient | None = None
+        self._quantity_step_size: dict[str, Decimal] = {}
+        self._price_tick_size: dict[str, Decimal] = {}
 
         self._depth_caches = {}
 
@@ -63,8 +66,29 @@ class BinanceFutureGateway:
             self._api_secret,
             testnet=self._testnet,
         )
+        self._load_exchange_rules()
 
         self._loop_thread.start()
+
+    def _load_exchange_rules(self) -> None:
+        try:
+            exchange_info = self._client.futures_exchange_info()
+        except Exception:
+            logging.exception("Failed to load Binance Futures exchange rules")
+            return
+
+        for symbol_info in exchange_info["symbols"]:
+            symbol = symbol_info["symbol"]
+
+            if symbol not in self._symbols:
+                continue
+
+            for symbol_filter in symbol_info["filters"]:
+                if symbol_filter["filterType"] == "LOT_SIZE":
+                    self._quantity_step_size[symbol] = Decimal(symbol_filter["stepSize"])
+
+                if symbol_filter["filterType"] == "PRICE_FILTER":
+                    self._price_tick_size[symbol] = Decimal(symbol_filter["tickSize"])
 
     def _run_event_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
@@ -230,14 +254,21 @@ class BinanceFutureGateway:
         post_only: bool = True,
     ) -> bool:
         try:
+            symbol = symbol.upper()
             time_in_force = "GTX" if post_only else "GTC"
+            formatted_price = self._format_price(symbol, price)
+            formatted_quantity = self._format_quantity(symbol, quantity)
+
+            if Decimal(formatted_quantity) <= 0:
+                logging.error("Limit order quantity rounded to zero for %s: %s", symbol, quantity)
+                return False
 
             self._client.futures_create_order(
-                symbol=symbol.upper(),
+                symbol=symbol,
                 side=side.name,
                 type="LIMIT",
-                price=price,
-                quantity=quantity,
+                price=formatted_price,
+                quantity=formatted_quantity,
                 timeInForce=time_in_force,
             )
 
@@ -249,11 +280,18 @@ class BinanceFutureGateway:
 
     def place_market_order(self, symbol: str, side: Side, quantity: float) -> bool:
         try:
+            symbol = symbol.upper()
+            formatted_quantity = self._format_quantity(symbol, quantity)
+
+            if Decimal(formatted_quantity) <= 0:
+                logging.error("Market order quantity rounded to zero for %s: %s", symbol, quantity)
+                return False
+
             self._client.futures_create_order(
-                symbol=symbol.upper(),
+                symbol=symbol,
                 side=side.name,
                 type="MARKET",
-                quantity=quantity,
+                quantity=formatted_quantity,
             )
 
             return True
@@ -270,3 +308,21 @@ class BinanceFutureGateway:
 
     def register_agg_trade_callback(self, callback: Callable[[AggTrade], None]) -> None:
         self._agg_trade_callbacks.append(callback)
+
+    def _format_quantity(self, symbol: str, quantity: float) -> str:
+        step_size = self._quantity_step_size.get(symbol.upper())
+        return self._format_to_increment(quantity, step_size)
+
+    def _format_price(self, symbol: str, price: float) -> str:
+        tick_size = self._price_tick_size.get(symbol.upper())
+        return self._format_to_increment(price, tick_size)
+
+    def _format_to_increment(self, value: float, increment: Decimal | None) -> str:
+        decimal_value = Decimal(str(value))
+
+        if increment is not None and increment > 0:
+            decimal_value = (decimal_value / increment).to_integral_value(
+                rounding=ROUND_DOWN
+            ) * increment
+
+        return format(decimal_value.normalize(), "f")

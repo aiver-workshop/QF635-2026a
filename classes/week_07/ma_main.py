@@ -1,18 +1,17 @@
 """
-Week 7 trading engine demo main file.
+Week 7 moving average crossover strategy main file.
 
-This file creates the live gateway, live order manager, strategy, and trading
-engine. The engine wires callbacks between the gateway and strategy, and gives
-the strategy an engine API for sending orders. The engine also owns shared
-runtime services such as position, PnL, risk, and dashboard publishing.
+This file creates the live gateway, live order manager, moving average strategy,
+and trading engine. TradingEngine owns callbacks, order routing, position/PnL,
+risk, and dashboard publishing.
 """
 
 import logging
 import time
 
 from gateway import BinanceFutureGateway
+from ma_strategy import MovingAverageCrossoverStrategy
 from order_manager import LiveOrderManager
-from simple_strategy import SimpleStrategy
 from trading_engine import TradingEngine
 
 
@@ -29,6 +28,9 @@ if __name__ == "__main__":
     INITIAL_CAPITAL = 10000.0
 
     SYMBOLS = ["BTCUSDT"]
+    SHORT_WINDOW = 10
+    LONG_WINDOW = 30
+    TRADE_QUANTITY = 0.1
 
     gateway = BinanceFutureGateway(
         symbols=SYMBOLS,
@@ -39,7 +41,11 @@ if __name__ == "__main__":
     )
 
     order_manager = LiveOrderManager(gateway)
-    strategy = SimpleStrategy()
+    strategy = MovingAverageCrossoverStrategy(
+        short_window=SHORT_WINDOW,
+        long_window=LONG_WINDOW,
+        trade_quantity=TRADE_QUANTITY,
+    )
     engine = TradingEngine(
         gateway=gateway,
         strategy=strategy,
