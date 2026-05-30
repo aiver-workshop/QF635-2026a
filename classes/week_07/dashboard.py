@@ -1,8 +1,5 @@
-"""
-Live Week 7 strategy dashboard.
-"""
-
 import json
+import time
 from pathlib import Path
 
 from dash import Dash, dcc, html
@@ -13,8 +10,39 @@ import plotly.graph_objects as go
 
 DASHBOARD_FILE = Path(__file__).with_name("dashboard_state.json")
 UPDATE_INTERVAL_MS = 1000
+STALE_AFTER_SECONDS = 5
+
+last_seen_timestamp = None
+last_change_time = time.time()
 
 app = Dash(__name__)
+
+app.index_string = """
+<!DOCTYPE html>
+<html>
+<head>
+    {%metas%}
+    <title>{%title%}</title>
+    {%favicon%}
+    {%css%}
+    <style>
+        @keyframes flash {
+            0% { opacity: 1; }
+            50% { opacity: 0.25; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    {%app_entry%}
+    <footer>
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+    </footer>
+</body>
+</html>
+"""
 
 BG_COLOR = "#0B0F19"
 PANEL_COLOR = "#151D30"
@@ -49,7 +77,6 @@ def signal_color(value):
             return NEGATIVE
     except Exception:
         pass
-
     return TEXT_MAIN
 
 
@@ -70,10 +97,7 @@ def get_value_style(value, force_negative=False):
     except Exception:
         numeric_value = 0.0
 
-    if force_negative and numeric_value != 0:
-        color = NEGATIVE
-    else:
-        color = signal_color(numeric_value)
+    color = NEGATIVE if force_negative and numeric_value != 0 else signal_color(numeric_value)
 
     return {
         "color": color,
@@ -152,8 +176,16 @@ app.layout = html.Div(
                             style={"fontSize": "26px", "margin": "0"},
                         ),
                         html.Div(
-                            id="last-update",
-                            style={"color": TEXT_MUTED, "fontSize": "13px"},
+                            children=[
+                                html.Div(
+                                    id="last-update",
+                                    style={"color": TEXT_MUTED, "fontSize": "13px"},
+                                ),
+                                html.Div(
+                                    id="stale-alert",
+                                    style={"display": "none"},
+                                ),
+                            ]
                         ),
                     ],
                 ),
@@ -206,6 +238,9 @@ app.layout = html.Div(
 @app.callback(
     [
         Output("last-update", "children"),
+        Output("stale-alert", "children"),
+        Output("stale-alert", "style"),
+
         Output("equity-card", "children"),
         Output("total-pnl-card", "children"),
         Output("realized-pnl-card", "children"),
@@ -231,7 +266,28 @@ app.layout = html.Div(
     Input("interval-trigger", "n_intervals"),
 )
 def update_dashboard(_):
+    global last_seen_timestamp, last_change_time
+
     state = load_state()
+    current_timestamp = state.get("timestamp", "-")
+    now = time.time()
+
+    if current_timestamp != last_seen_timestamp:
+        last_seen_timestamp = current_timestamp
+        last_change_time = now
+
+    is_stale = now - last_change_time > STALE_AFTER_SECONDS
+
+    stale_style = {
+        "display": "block" if is_stale else "none",
+        "color": "#EF4444",
+        "fontSize": "13px",
+        "fontWeight": "700",
+        "marginTop": "4px",
+        "animation": "flash 1s infinite",
+        "textAlign": "right",
+    }
+
     summary = state.get("summary", {})
     positions = state.get("positions", [])
 
@@ -245,7 +301,10 @@ def update_dashboard(_):
     table = build_positions_table(positions)
 
     return (
-        f"Last update: {state.get('timestamp', '-')}",
+        f"Last update: {current_timestamp}",
+        "⚠ DATA STALE: no update for more than 5 seconds",
+        stale_style,
+
         format_money(equity),
         format_money(total_pnl),
         format_money(realized_pnl),
@@ -285,11 +344,9 @@ def build_positions_table(positions: list[dict]):
         df = pd.DataFrame([{column: "-" for column in columns}])
     else:
         df = pd.DataFrame(positions)
-
         for column in columns:
             if column not in df.columns:
                 df[column] = 0.0
-
         df = df[columns]
 
     display_names = [
@@ -333,30 +390,18 @@ def build_positions_table(positions: list[dict]):
                     "values": display_names,
                     "fill_color": HEADER_COLOR,
                     "align": alignments,
-                    "font": {
-                        "color": TEXT_MAIN,
-                        "size": 15,
-                    },
-                    "line": {
-                        "color": GRID_COLOR,
-                        "width": 1,
-                    },
+                    "font": {"color": TEXT_MAIN, "size": 15},
+                    "line": {"color": GRID_COLOR, "width": 1},
                     "height": 40,
                 },
                 cells={
                     "values": values,
                     "fill_color": PANEL_COLOR,
                     "align": alignments,
-                    "font": {
-                        "color": font_colors,
-                        "size": 16,
-                    },
-                    "line": {
-                        "color": GRID_COLOR,
-                        "width": 1,
-                    },
+                    "font": {"color": font_colors, "size": 16},
+                    "line": {"color": GRID_COLOR, "width": 1},
                     "height": 38,
-                }
+                },
             )
         ]
     )
