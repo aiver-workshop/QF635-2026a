@@ -77,6 +77,14 @@ class MovingAverageCrossoverStrategy:
         prices.append(mid_price)
 
         if len(prices) < self.long_window:
+            self.trading_engine.update_strategy_analytics(
+                {
+                    "symbol": symbol,
+                    "window": f"{len(prices)}/{self.long_window}",
+                    "mid_price": mid_price,
+                    "signal": "WARMING_UP",
+                }
+            )
             self._log_waiting_for_window(symbol, len(prices))
             return
 
@@ -84,6 +92,20 @@ class MovingAverageCrossoverStrategy:
         long_ma = self._calculate_average(prices)
         signal = self._get_signal(short_ma, long_ma)
         previous_signal = self.last_signal.get(symbol)
+        current_position = self.trading_engine.get_position(symbol)
+        target_position = signal * self.trade_quantity
+
+        self.trading_engine.update_strategy_analytics(
+            {
+                "symbol": symbol,
+                "mid_price": mid_price,
+                "short_ma": short_ma,
+                "long_ma": long_ma,
+                "signal": self._format_signal(signal),
+                "current_position": current_position,
+                "target_position": target_position,
+            }
+        )
 
         if previous_signal is None:
             self.last_signal[symbol] = signal
@@ -180,3 +202,11 @@ class MovingAverageCrossoverStrategy:
 
     def _calculate_average(self, values: deque[float] | list[float]) -> float:
         return sum(values) / len(values)
+
+    def _format_signal(self, signal: int) -> str:
+        if signal > 0:
+            return "LONG"
+        if signal < 0:
+            return "SHORT"
+
+        return "FLAT"

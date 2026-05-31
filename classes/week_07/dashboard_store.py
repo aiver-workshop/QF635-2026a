@@ -24,12 +24,14 @@ class DashboardStore:
         summary: dict,
         positions: list[dict],
         orders: list[dict] | None = None,
+        analytics: dict | None = None,
     ) -> None:
         payload = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "summary": summary,
             "positions": positions,
             "orders": orders or [],
+            "analytics": analytics or {},
         }
 
         temp_path = self.file_path.with_suffix(

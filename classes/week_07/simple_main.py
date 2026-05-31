@@ -27,6 +27,7 @@ if __name__ == "__main__":
     API_SECRET = "cWWLYlLzyjUg4Rv9xxdhiXnozdCKRTCddIghS4m1DIqayJMialFpqDxgp62HPoeC"
     USE_TESTNET = True
     INITIAL_CAPITAL = 10000.0
+    MAX_ORDER_NOTIONAL = 10000.0
 
     SYMBOLS = ["BTCUSDT"]
 
@@ -38,7 +39,10 @@ if __name__ == "__main__":
         subscribe_execution=True,
     )
 
-    order_manager = LiveOrderManager(gateway)
+    order_manager = LiveOrderManager(
+        gateway=gateway,
+        max_order_notional=MAX_ORDER_NOTIONAL,
+    )
     strategy = SimpleStrategy()
     engine = TradingEngine(
         gateway=gateway,

@@ -1,5 +1,7 @@
 import json
+import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from dash import Dash, dcc, html
@@ -9,6 +11,8 @@ import plotly.graph_objects as go
 
 
 DASHBOARD_FILE = Path(__file__).with_name("dashboard_state.json")
+KILL_SWITCH_FILE = Path(__file__).with_name("kill_switch_state.json")
+EXIT_PROGRAM_FILE = Path(__file__).with_name("exit_program_state.json")
 UPDATE_INTERVAL_MS = 1000
 STALE_AFTER_SECONDS = 5
 
@@ -108,13 +112,50 @@ def get_value_style(value, force_negative=False):
 
 def load_state() -> dict:
     if not DASHBOARD_FILE.exists() or DASHBOARD_FILE.stat().st_size == 0:
-        return {"timestamp": "-", "summary": {}, "positions": [], "orders": []}
+        return {"timestamp": "-", "summary": {}, "positions": [], "orders": [], "analytics": {}}
 
     try:
         with open(DASHBOARD_FILE, "r") as file:
             return json.load(file)
     except Exception:
-        return {"timestamp": "READ_ERROR", "summary": {}, "positions": [], "orders": []}
+        return {"timestamp": "READ_ERROR", "summary": {}, "positions": [], "orders": [], "analytics": {}}
+
+
+def load_kill_switch_state() -> dict:
+    if not KILL_SWITCH_FILE.exists() or KILL_SWITCH_FILE.stat().st_size == 0:
+        return {"active": False, "updated_at": "-"}
+
+    try:
+        with open(KILL_SWITCH_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except Exception:
+        return {"active": True, "updated_at": "READ_ERROR"}
+
+
+def write_kill_switch_state(active: bool) -> None:
+    payload = {
+        "active": active,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    temp_path = KILL_SWITCH_FILE.with_suffix(KILL_SWITCH_FILE.suffix + ".tmp")
+
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(payload, file, indent=2)
+
+    os.replace(temp_path, KILL_SWITCH_FILE)
+
+
+def write_exit_program_state(active: bool) -> None:
+    payload = {
+        "active": active,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    temp_path = EXIT_PROGRAM_FILE.with_suffix(EXIT_PROGRAM_FILE.suffix + ".tmp")
+
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(payload, file, indent=2)
+
+    os.replace(temp_path, EXIT_PROGRAM_FILE)
 
 
 def format_money(value: float) -> str:
@@ -161,7 +202,7 @@ app.layout = html.Div(
     },
     children=[
         html.Div(
-            style={"maxWidth": "1180px", "margin": "0 auto"},
+            style={"maxWidth": "1500px", "margin": "0 auto"},
             children=[
                 html.Div(
                     style={
@@ -185,6 +226,53 @@ app.layout = html.Div(
                                     id="stale-alert",
                                     style={"display": "none"},
                                 ),
+                                html.Div(
+                                    style={
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "flex-end",
+                                        "gap": "10px",
+                                        "marginTop": "10px",
+                                    },
+                                    children=[
+                                        html.Div(
+                                            id="kill-switch-status",
+                                            style={"color": TEXT_MUTED, "fontSize": "13px"},
+                                        ),
+                                        html.Button(
+                                            "Stop Trading",
+                                            id="kill-switch-button",
+                                            n_clicks=0,
+                                            style={
+                                                "backgroundColor": NEGATIVE,
+                                                "color": "#FFFFFF",
+                                                "border": "none",
+                                                "borderRadius": "6px",
+                                                "padding": "9px 14px",
+                                                "fontWeight": "700",
+                                                "boxShadow": "0 1px 0 rgba(255,255,255,0.08) inset",
+                                                "cursor": "pointer",
+                                            },
+                                        ),
+                                        html.Button(
+                                            "Kill Switch",
+                                            id="exit-program-button",
+                                            n_clicks=0,
+                                            style={
+                                                "backgroundColor": "#991B1B",
+                                                "color": "#FFFFFF",
+                                                "border": "none",
+                                                "borderRadius": "6px",
+                                                "padding": "9px 14px",
+                                                "fontWeight": "700",
+                                                "boxShadow": "0 1px 0 rgba(255,255,255,0.08) inset",
+                                                "cursor": "pointer",
+                                            },
+                                        ),
+                                    ],
+                                ),
+                                html.Div(id="kill-switch-write-result", style={"display": "none"}),
+                                html.Div(id="exit-program-write-result", style={"display": "none"}),
                             ]
                         ),
                     ],
@@ -207,21 +295,48 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     style={
-                        "backgroundColor": PANEL_COLOR,
-                        "border": f"1px solid {GRID_COLOR}",
-                        "borderRadius": "8px",
-                        "padding": "14px",
+                        "display": "flex",
+                        "gap": "16px",
                         "marginBottom": "16px",
+                        "alignItems": "stretch",
                     },
                     children=[
-                        html.H2(
-                            "Equity Curve",
-                            style={"fontSize": "18px", "margin": "0 0 10px 0"},
+                        html.Div(
+                            style={
+                                "backgroundColor": PANEL_COLOR,
+                                "border": f"1px solid {GRID_COLOR}",
+                                "borderRadius": "8px",
+                                "padding": "14px",
+                                "flex": "1",
+                                "minWidth": "0",
+                            },
+                            children=[
+                                html.H2(
+                                    "Equity Curve",
+                                    style={"fontSize": "18px", "margin": "0 0 10px 0"},
+                                ),
+                                dcc.Graph(
+                                    id="equity-chart",
+                                    config={"displayModeBar": False},
+                                    style={"height": "320px"},
+                                ),
+                            ],
                         ),
-                        dcc.Graph(
-                            id="equity-chart",
-                            config={"displayModeBar": False},
-                            style={"height": "320px"},
+                        html.Div(
+                            style={
+                                "backgroundColor": PANEL_COLOR,
+                                "border": f"1px solid {GRID_COLOR}",
+                                "borderRadius": "8px",
+                                "padding": "14px",
+                                "width": "360px",
+                            },
+                            children=[
+                                html.H2(
+                                    "Strategy Analytics",
+                                    style={"fontSize": "18px", "margin": "0 0 10px 0"},
+                                ),
+                                html.Div(id="strategy-analytics"),
+                            ],
                         ),
                     ],
                 ),
@@ -280,6 +395,11 @@ app.layout = html.Div(
         Output("last-update", "children"),
         Output("stale-alert", "children"),
         Output("stale-alert", "style"),
+        Output("kill-switch-status", "children"),
+        Output("kill-switch-status", "style"),
+        Output("kill-switch-button", "children"),
+        Output("kill-switch-button", "disabled"),
+        Output("kill-switch-button", "style"),
 
         Output("equity-card", "children"),
         Output("total-pnl-card", "children"),
@@ -288,6 +408,7 @@ app.layout = html.Div(
         Output("max-dd-card", "children"),
         Output("max-dd-pct-card", "children"),
         Output("equity-chart", "figure"),
+        Output("strategy-analytics", "children"),
         Output("positions-table", "figure"),
         Output("orders-table", "figure"),
 
@@ -311,6 +432,7 @@ def update_dashboard(_):
     global last_seen_timestamp, last_change_time
 
     state = load_state()
+    kill_switch_state = load_kill_switch_state()
     current_timestamp = state.get("timestamp", "-")
     now = time.time()
 
@@ -330,9 +452,35 @@ def update_dashboard(_):
         "textAlign": "right",
     }
 
+    kill_switch_active = bool(kill_switch_state.get("active", False))
+    kill_switch_updated_at = kill_switch_state.get("updated_at", "-")
+    kill_switch_status = "Trading stopped" if kill_switch_active else "Trading enabled"
+    if kill_switch_active:
+        kill_switch_status = f"{kill_switch_status} | {kill_switch_updated_at}"
+    kill_switch_button_text = "Start Trading" if kill_switch_active else "Stop Trading"
+
+    kill_switch_status_style = {
+        "color": NEGATIVE if kill_switch_active else POSITIVE,
+        "fontSize": "13px",
+        "fontWeight": "700",
+        "animation": "flash 1s infinite" if kill_switch_active else "none",
+    }
+    kill_switch_button_style = {
+        "backgroundColor": POSITIVE if kill_switch_active else NEGATIVE,
+        "color": "#FFFFFF",
+        "border": "none",
+        "borderRadius": "6px",
+        "padding": "9px 14px",
+        "fontWeight": "700",
+        "boxShadow": "0 1px 0 rgba(255,255,255,0.08) inset",
+        "cursor": "pointer",
+        "opacity": 1.0,
+    }
+
     summary = state.get("summary", {})
     positions = state.get("positions", [])
     orders = state.get("orders", [])
+    analytics = state.get("analytics", {})
 
     equity = summary.get("equity", 0.0)
     total_pnl = summary.get("total_pnl", 0.0)
@@ -343,6 +491,7 @@ def update_dashboard(_):
     equity_curve = summary.get("equity_curve", [])
 
     equity_chart = build_equity_chart(equity_curve, equity)
+    analytics_card = build_analytics_card(analytics)
     positions_table = build_positions_table(positions)
     orders_table = build_orders_table(orders)
 
@@ -350,6 +499,11 @@ def update_dashboard(_):
         f"Last update: {current_timestamp}",
         "DATA STALE: no update for more than 5 seconds",
         stale_style,
+        kill_switch_status,
+        kill_switch_status_style,
+        kill_switch_button_text,
+        False,
+        kill_switch_button_style,
 
         format_money(equity),
         format_money(total_pnl),
@@ -358,6 +512,7 @@ def update_dashboard(_):
         format_money(max_drawdown),
         format_pct(max_drawdown_pct),
         equity_chart,
+        analytics_card,
         positions_table,
         orders_table,
 
@@ -375,6 +530,82 @@ def update_dashboard(_):
         get_value_style(max_drawdown, force_negative=True),
         get_value_style(max_drawdown_pct, force_negative=True),
     )
+
+
+@app.callback(
+    Output("kill-switch-write-result", "children"),
+    Input("kill-switch-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_trading(n_clicks):
+    if not n_clicks:
+        return ""
+
+    current_state = load_kill_switch_state()
+    next_active = not bool(current_state.get("active", False))
+    write_kill_switch_state(active=next_active)
+
+    if next_active:
+        return "stopped"
+
+    return "started"
+
+
+@app.callback(
+    Output("exit-program-write-result", "children"),
+    Input("exit-program-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def request_exit_program(n_clicks):
+    if not n_clicks:
+        return ""
+
+    write_exit_program_state(active=True)
+    return "exit_requested"
+
+
+def build_analytics_card(analytics: dict):
+    if not analytics:
+        return html.Div(
+            "No analytics published",
+            style={"color": TEXT_MUTED, "fontSize": "14px", "paddingTop": "8px"},
+        )
+
+    rows = []
+    for key, value in analytics.items():
+        rows.append(
+            html.Div(
+                style={
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "gap": "14px",
+                    "padding": "9px 0",
+                    "borderBottom": f"1px solid {GRID_COLOR}",
+                },
+                children=[
+                    html.Div(
+                        str(key),
+                        style={
+                            "color": TEXT_MUTED,
+                            "fontSize": "12px",
+                            "textTransform": "uppercase",
+                        },
+                    ),
+                    html.Div(
+                        format_analytics_value(value),
+                        style={
+                            "color": TEXT_MAIN,
+                            "fontSize": "15px",
+                            "fontWeight": "700",
+                            "textAlign": "right",
+                            "overflowWrap": "anywhere",
+                        },
+                    ),
+                ],
+            )
+        )
+
+    return rows
 
 
 def build_equity_chart(equity_curve: list[float], current_equity: float):
@@ -445,7 +676,7 @@ def build_positions_table(positions: list[dict]):
         "MTM Price",
         "Realized PnL",
         "Unrealized PnL",
-        "Symbol PnL",
+        "Total PnL",
     ]
 
     values = []
@@ -513,7 +744,7 @@ def build_orders_table(orders: list[dict]):
         "symbol",
         "side",
         "status",
-        "execution_type",
+        "order_type",
         "average_filled_price",
         "filled_quantity",
         "order_id",
@@ -567,7 +798,7 @@ def build_orders_table(orders: list[dict]):
     fig = go.Figure(
         data=[
             go.Table(
-                columnwidth=[0.8, 0.8, 1.0, 0.7, 1.2, 1.1, 1.1, 1.0, 1.6, 1.1],
+                columnwidth=[1.8, 1.8, 1.0, 0.7, 1.2, 1.0, 1.1, 1.0, 1.6, 1.1],
                 header={
                     "values": display_names,
                     "fill_color": HEADER_COLOR,
@@ -640,6 +871,19 @@ def format_position(value):
         return value
 
 
+def format_analytics_value(value):
+    if isinstance(value, float):
+        return f"{value:,.4f}"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+
+    return str(value)
+
+
 def format_order_id(value):
     if value == "-":
         return value
@@ -663,7 +907,7 @@ def side_color(value):
 def status_color(value):
     if value in ["FILLED", "PARTIALLY_FILLED"]:
         return POSITIVE
-    if value in ["CANCELED", "FAILED", "EXPIRED", "EXPIRED_IN_MATCH"]:
+    if value in ["CANCELED", "FAILED", "EXPIRED", "EXPIRED_IN_MATCH", "REJECTED"]:
         return NEGATIVE
 
     return TEXT_MAIN

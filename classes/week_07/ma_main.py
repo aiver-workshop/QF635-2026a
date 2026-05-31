@@ -31,6 +31,7 @@ if __name__ == "__main__":
     SHORT_WINDOW = 10
     LONG_WINDOW = 30
     TRADE_QUANTITY = 0.1
+    MAX_ORDER_NOTIONAL = 50000.0
 
     gateway = BinanceFutureGateway(
         symbols=SYMBOLS,
@@ -40,7 +41,10 @@ if __name__ == "__main__":
         subscribe_execution=True,
     )
 
-    order_manager = LiveOrderManager(gateway)
+    order_manager = LiveOrderManager(
+        gateway=gateway,
+        max_order_notional=MAX_ORDER_NOTIONAL,
+    )
     strategy = MovingAverageCrossoverStrategy(
         short_window=SHORT_WINDOW,
         long_window=LONG_WINDOW,

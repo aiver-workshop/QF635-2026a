@@ -196,6 +196,7 @@ class BinanceFutureGateway:
         symbol = trade_data["s"]
         execution_type = trade_data["x"]
         order_status = trade_data["X"]
+        order_type = trade_data["o"]
         side = trade_data["S"]
 
         order_event = OrderEvent(
@@ -206,6 +207,7 @@ class BinanceFutureGateway:
         )
 
         order_event.side = Side[side]
+        order_event.order_type = order_type
 
         if execution_type == "TRADE":
             order_event.last_filled_price = float(trade_data["L"])
