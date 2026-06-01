@@ -10,9 +10,10 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
-DASHBOARD_FILE = Path(__file__).with_name("dashboard_state.json")
-KILL_SWITCH_FILE = Path(__file__).with_name("kill_switch_state.json")
-EXIT_PROGRAM_FILE = Path(__file__).with_name("exit_program_state.json")
+STATE_DIR = Path(__file__).resolve().parent / "state"
+DASHBOARD_FILE = STATE_DIR / "dashboard_state.json"
+KILL_SWITCH_FILE = STATE_DIR / "kill_switch_state.json"
+EXIT_PROGRAM_FILE = STATE_DIR / "exit_program_state.json"
 UPDATE_INTERVAL_MS = 1000
 STALE_AFTER_SECONDS = 5
 
@@ -137,6 +138,7 @@ def write_kill_switch_state(active: bool) -> None:
         "active": active,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    KILL_SWITCH_FILE.parent.mkdir(parents=True, exist_ok=True)
     temp_path = KILL_SWITCH_FILE.with_suffix(KILL_SWITCH_FILE.suffix + ".tmp")
 
     with open(temp_path, "w", encoding="utf-8") as file:
@@ -150,6 +152,7 @@ def write_exit_program_state(active: bool) -> None:
         "active": active,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    EXIT_PROGRAM_FILE.parent.mkdir(parents=True, exist_ok=True)
     temp_path = EXIT_PROGRAM_FILE.with_suffix(EXIT_PROGRAM_FILE.suffix + ".tmp")
 
     with open(temp_path, "w", encoding="utf-8") as file:

@@ -35,6 +35,12 @@ if TYPE_CHECKING:
     from order_manager import OrderManager
 
 
+STATE_DIR = Path(__file__).resolve().parent / "state"
+DASHBOARD_STATE_FILE = STATE_DIR / "dashboard_state.json"
+KILL_SWITCH_STATE_FILE = STATE_DIR / "kill_switch_state.json"
+EXIT_PROGRAM_STATE_FILE = STATE_DIR / "exit_program_state.json"
+
+
 class Strategy(Protocol):
 
     def set_trading_engine(self, trading_engine: TradingEngine) -> None:
@@ -70,13 +76,13 @@ class TradingEngine:
         )
         self.risk_manager: RiskManager = RiskManager()
         self.dashboard_store: DashboardStore = DashboardStore(
-            dashboard_file or Path(__file__).with_name("dashboard_state.json")
+            dashboard_file or DASHBOARD_STATE_FILE
         )
         self.kill_switch_file: Path = Path(
-            kill_switch_file or Path(__file__).with_name("kill_switch_state.json")
+            kill_switch_file or KILL_SWITCH_STATE_FILE
         )
         self.exit_program_file: Path = Path(
-            exit_program_file or Path(__file__).with_name("exit_program_state.json")
+            exit_program_file or EXIT_PROGRAM_STATE_FILE
         )
         self.last_book: dict[str, OrderBook] = {}
         self.order_history: list[dict] = []

@@ -10,7 +10,7 @@ import logging
 import time
 
 from gateway import BinanceFutureGateway
-from ma_strategy import MovingAverageCrossoverStrategy
+from strategy_ma import MovingAverageCrossoverStrategy
 from order_manager import LiveOrderManager
 from trading_engine import TradingEngine
 

@@ -12,7 +12,7 @@ import time
 
 from gateway import BinanceFutureGateway
 from order_manager import LiveOrderManager
-from simple_strategy import SimpleStrategy
+from strategy_simple import SimpleStrategy
 from trading_engine import TradingEngine
 
 
