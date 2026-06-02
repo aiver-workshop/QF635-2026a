@@ -60,6 +60,7 @@ mamba install plotly
 mamba install fastapi
 mamba install uvicorn
 mamba install python-binance
+mamba install google-genai
 ```
 `-c` stands for --channel. It is used to specify a channel where to search for the package, and the channel is often the named owner.
 
